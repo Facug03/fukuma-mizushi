@@ -1,0 +1,12 @@
+[package]
+name = "fukuma-mizushi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "fukuma-mizushi"
+path = "src/main.rs"
+
+[dependencies]
+fukuma-core = { path = "../fukuma-core" }

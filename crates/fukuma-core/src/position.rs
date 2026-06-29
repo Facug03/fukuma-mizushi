@@ -35,6 +35,8 @@ pub struct Position {
     pub en_passant: Option<Square>,
     pub halfmove_clock: u8,
     pub fullmove_number: u16,
+    /// Incremental Zobrist hash.
+    pub hash: u64,
 }
 
 impl Position {
@@ -73,10 +75,14 @@ impl Position {
         let bb = Bitboard::from_sq(sq);
         self.bb_piece[piece.kind as usize] |= bb;
         self.bb_color[piece.color as usize] |= bb;
+        self.hash ^= crate::zobrist::piece_key(piece.color, piece.kind, sq);
     }
 
     #[inline]
     pub(crate) fn remove_piece(&mut self, sq: Square) {
+        if let Some(piece) = self.piece_at(sq) {
+            self.hash ^= crate::zobrist::piece_key(piece.color, piece.kind, sq);
+        }
         let mask = !Bitboard::from_sq(sq);
         for b in &mut self.bb_piece { *b &= mask; }
         for b in &mut self.bb_color { *b &= mask; }
@@ -135,6 +141,7 @@ impl Position {
             en_passant:     None,
             halfmove_clock: 0,
             fullmove_number: 1,
+            hash: 0,
         };
 
         // Piece placement — FEN starts at a8 (sq=56), ranks go down.
@@ -180,6 +187,7 @@ impl Position {
 
         pos.halfmove_clock  = halfmove.parse().map_err(|_| FenError::InvalidHalfmove)?;
         pos.fullmove_number = fullmove.parse().map_err(|_| FenError::InvalidFullmove)?;
+        pos.hash = crate::zobrist::hash_from_scratch(&pos);
         Ok(pos)
     }
 

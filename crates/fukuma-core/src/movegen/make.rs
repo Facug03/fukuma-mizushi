@@ -10,6 +10,7 @@ pub struct UndoState {
     pub castling:   CastlingRights,
     pub en_passant: Option<Square>,
     pub halfmove:   u8,
+    pub hash:       u64,             // full hash before the move
 }
 
 /// Per-square castling-rights mask: AND this when a piece leaves/arrives at that square.
@@ -38,7 +39,12 @@ impl Position {
             castling:   self.castling,
             en_passant: self.en_passant,
             halfmove:   self.halfmove_clock,
+            hash:       self.hash,
         };
+
+        // XOR out old castling and EP keys before modifying.
+        self.hash ^= crate::zobrist::castling_key(self.castling.0);
+        if let Some(ep) = self.en_passant { self.hash ^= crate::zobrist::ep_key(ep); }
 
         self.remove_piece(from);
 
@@ -84,6 +90,11 @@ impl Position {
         if us == Color::Black { self.fullmove_number += 1; }
         self.side_to_move = them;
 
+        // XOR in new castling, EP, and side-to-move keys.
+        self.hash ^= crate::zobrist::castling_key(self.castling.0);
+        if let Some(ep) = self.en_passant { self.hash ^= crate::zobrist::ep_key(ep); }
+        self.hash ^= crate::zobrist::side_key();
+
         UndoState { captured, ..undo }
     }
 
@@ -113,6 +124,8 @@ impl Position {
             self.remove_piece(rt);
             self.put(rf, Piece::new(us, PieceType::Rook));
         }
+        // Restore hash directly — simpler than reversing all XOR operations.
+        self.hash = undo.hash;
     }
 }
 

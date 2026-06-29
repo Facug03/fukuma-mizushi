@@ -1,10 +1,12 @@
-//! Negamax search with alpha-beta pruning, iterative deepening, and quiescence.
+//! Negamax search with alpha-beta pruning, iterative deepening, quiescence,
+//! transposition table, and move ordering (MVV-LVA + killer moves + history).
 
 use std::time::{Duration, Instant};
 
 use crate::eval::evaluate;
 use crate::movegen::{legal_moves, Move};
 use crate::position::Position;
+use crate::tt::{Bound, TranspositionTable};
 use crate::types::PieceType;
 
 pub const INFINITY: i32 = 1_000_000;
@@ -37,11 +39,19 @@ pub struct Searcher {
     root_best:  Option<Move>,
     stop_time:  Option<Instant>,
     stopped:    bool,
+    tt:         TranspositionTable,
+    killers:    [[Move; 2]; 64],
+    history:    [[[i32; 64]; 64]; 2], // [color][from][to]
 }
 
 impl Searcher {
     pub fn new() -> Self {
-        Self { nodes: 0, root_best: None, stop_time: None, stopped: false }
+        Self {
+            nodes: 0, root_best: None, stop_time: None, stopped: false,
+            tt: TranspositionTable::new(32),
+            killers: [[Move::NULL; 2]; 64],
+            history: [[[0; 64]; 64]; 2],
+        }
     }
 
     /// Entry point: iterative deepening.
@@ -95,27 +105,68 @@ impl Searcher {
         if depth == 0 { return self.quiescence(pos, alpha, beta); }
 
         self.nodes += 1;
-        let moves = legal_moves(pos);
 
+        // TT probe.
+        let tt_move = if let Some(e) = self.tt.probe(pos.hash) {
+            if e.depth >= depth {
+                let s = e.score;
+                let b = e.bound;
+                if b == Bound::Exact as u8 { return s; }
+                if b == Bound::Lower as u8 && s >= beta  { return s; }
+                if b == Bound::Upper as u8 && s <= alpha { return s; }
+            }
+            e.mv
+        } else {
+            Move::NULL
+        };
+
+        let moves = legal_moves(pos);
         if moves.is_empty() {
-            return if is_in_check(pos) { -(MATE_SCORE) } else { 0 };
+            return if is_in_check(pos) { -MATE_SCORE } else { 0 };
         }
 
-        let mut best = -INFINITY;
+        let ply = depth as usize; // approximate ply from current depth
+        let ordered = order_moves_full(&moves, pos, tt_move,
+            &self.killers[ply.min(63)],
+            &self.history[pos.side_to_move as usize]);
 
-        for mv in order_moves(&moves, pos) {
+        let orig_alpha = alpha;
+        let mut best_score = -INFINITY;
+        let mut best_mv    = Move::NULL;
+
+        for mv in ordered {
             let undo = pos.make_move(mv);
             let score = -self.negamax(pos, -beta, -alpha, depth - 1);
             pos.unmake_move(mv, undo);
 
             if self.stopped { return 0; }
-            if score > best { best = score; }
+
+            if score > best_score {
+                best_score = score;
+                best_mv    = mv;
+            }
             if score > alpha {
                 alpha = score;
-                if alpha >= beta { break; }
+                if alpha >= beta {
+                    // Beta cut-off: store killer + history.
+                    if !mv.is_capture() {
+                        let k = &mut self.killers[ply.min(63)];
+                        if k[0] != mv { k[1] = k[0]; k[0] = mv; }
+                        self.history[pos.side_to_move as usize]
+                            [mv.from().index()][mv.to().index()] += (depth as i32).pow(2);
+                    }
+                    break;
+                }
             }
         }
-        best
+
+        // TT store.
+        let bound = if best_score <= orig_alpha { Bound::Upper }
+                    else if best_score >= beta  { Bound::Lower }
+                    else                        { Bound::Exact };
+        self.tt.store(pos.hash, best_score, best_mv, depth, bound);
+
+        best_score
     }
 
     fn quiescence(&mut self, pos: &mut Position, mut alpha: i32, beta: i32) -> i32 {
@@ -161,7 +212,7 @@ impl Searcher {
     }
 }
 
-// ── Move ordering: captures first (MVV-LVA), then quiets ─────────────────────
+// ── Move ordering: TT move > captures (MVV-LVA) > killers > history > quiets ─
 
 fn mvv_lva(mv: Move, pos: &Position) -> i32 {
     if !mv.is_capture() { return 0; }
@@ -178,12 +229,33 @@ fn piece_value(kind: PieceType) -> i32 {
     }
 }
 
-fn order_moves(moves: &[Move], pos: &Position) -> Vec<Move> {
-    let mut scored: Vec<(i32, Move)> = moves.iter()
-        .map(|&mv| (mvv_lva(mv, pos), mv))
-        .collect();
+fn order_moves_full(
+    moves: &[Move],
+    pos: &Position,
+    tt_move: Move,
+    killers: &[Move; 2],
+    history: &[[i32; 64]; 64],
+) -> Vec<Move> {
+    let mut scored: Vec<(i32, Move)> = moves.iter().map(|&mv| {
+        let score = if mv == tt_move {
+            2_000_000
+        } else if mv.is_capture() {
+            1_000_000 + mvv_lva(mv, pos)
+        } else if mv == killers[0] {
+            900_000
+        } else if mv == killers[1] {
+            800_000
+        } else {
+            history[mv.from().index()][mv.to().index()]
+        };
+        (score, mv)
+    }).collect();
     scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
     scored.into_iter().map(|(_, mv)| mv).collect()
+}
+
+fn order_moves(moves: &[Move], pos: &Position) -> Vec<Move> {
+    order_moves_full(moves, pos, Move::NULL, &[Move::NULL; 2], &[[0; 64]; 64])
 }
 
 fn is_in_check(pos: &Position) -> bool {

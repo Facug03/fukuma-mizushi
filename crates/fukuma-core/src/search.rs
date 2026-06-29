@@ -200,8 +200,11 @@ impl Searcher {
         alpha
     }
 
+    pub fn stop(&mut self) { self.stopped = true; }
+
+    pub fn tt_clear(&mut self) { self.tt.clear(); }
+
     fn should_stop(&mut self) -> bool {
-        if self.stopped { return true; }
         if let Some(t) = self.stop_time {
             if Instant::now() >= t {
                 self.stopped = true;

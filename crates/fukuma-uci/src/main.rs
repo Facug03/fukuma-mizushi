@@ -9,7 +9,7 @@ use fukuma_core::search::{Limits, Searcher};
 use fukuma_core::types::Color;
 
 fn main() {
-    let stdin  = io::stdin();
+    let stdin = io::stdin();
     let stdout = io::stdout();
     let searcher = Arc::new(Mutex::new(Searcher::new()));
 
@@ -18,7 +18,9 @@ fn main() {
     for line in stdin.lock().lines() {
         let line = line.expect("stdin error");
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
 
         let mut tokens = line.splitn(2, ' ');
         match tokens.next() {
@@ -28,7 +30,7 @@ fn main() {
                 writeln!(out, "id author Kiro [claude-sonnet-4-5] (Amazon)").unwrap();
                 writeln!(out, "uciok").unwrap();
             }
-            Some("isready")    => println!("readyok"),
+            Some("isready") => println!("readyok"),
             Some("ucinewgame") => {
                 pos = Position::startpos();
                 searcher.lock().unwrap().tt_clear();
@@ -37,20 +39,23 @@ fn main() {
                 pos = parse_position(line);
             }
             Some("go") => {
-                let rest   = tokens.next().unwrap_or("");
+                let rest = tokens.next().unwrap_or("");
                 let limits = parse_go(rest, &pos);
-                let s_arc  = Arc::clone(&searcher);
-                let mut p  = pos.clone();
+                let s_arc = Arc::clone(&searcher);
+                let mut p = pos.clone();
                 thread::spawn(move || {
-                    let mut s   = s_arc.lock().unwrap();
-                    let info    = s.search(&mut p, &limits);
-                    let best_mv = info.best_move
+                    let mut s = s_arc.lock().unwrap();
+                    let info = s.search(&mut p, &limits);
+                    let best_mv = info
+                        .best_move
                         .map(|m| m.to_string())
                         .unwrap_or_else(|| "0000".to_string());
                     println!("bestmove {best_mv}");
                 });
             }
-            Some("stop") => { searcher.lock().unwrap().stop(); }
+            Some("stop") => {
+                searcher.lock().unwrap().stop();
+            }
             Some("quit") | None => break,
             _ => {}
         }
@@ -64,7 +69,7 @@ fn parse_position(line: &str) -> Position {
 
     let (pos_part, moves_part) = match rest.split_once(" moves ") {
         Some((p, m)) => (p, m),
-        None         => (rest, ""),
+        None => (rest, ""),
     };
 
     let mut pos = if pos_part.trim() == "startpos" {
@@ -87,26 +92,29 @@ fn parse_position(line: &str) -> Position {
 // ── Go / time management ──────────────────────────────────────────────────────
 
 fn parse_go(args: &str, pos: &Position) -> Limits {
-    let mut limits     = Limits::default();
+    let mut limits = Limits::default();
     let mut wt: Option<u64> = None;
     let mut bt: Option<u64> = None;
-    let mut winc  = 0u64;
-    let mut binc  = 0u64;
+    let mut winc = 0u64;
+    let mut binc = 0u64;
     let mut movestogo = 30u64;
 
     let mut toks = args.split_ascii_whitespace();
     while let Some(tok) = toks.next() {
         match tok {
-            "depth"     => limits.depth     = toks.next().and_then(|t| t.parse().ok()),
-            "movetime"  => limits.move_time = toks.next()
-                                .and_then(|t| t.parse::<u64>().ok())
-                                .map(Duration::from_millis),
-            "wtime"     => wt        = toks.next().and_then(|t| t.parse().ok()),
-            "btime"     => bt        = toks.next().and_then(|t| t.parse().ok()),
-            "winc"      => winc      = toks.next().and_then(|t| t.parse().ok()).unwrap_or(0),
-            "binc"      => binc      = toks.next().and_then(|t| t.parse().ok()).unwrap_or(0),
+            "depth" => limits.depth = toks.next().and_then(|t| t.parse().ok()),
+            "movetime" => {
+                limits.move_time = toks
+                    .next()
+                    .and_then(|t| t.parse::<u64>().ok())
+                    .map(Duration::from_millis)
+            }
+            "wtime" => wt = toks.next().and_then(|t| t.parse().ok()),
+            "btime" => bt = toks.next().and_then(|t| t.parse().ok()),
+            "winc" => winc = toks.next().and_then(|t| t.parse().ok()).unwrap_or(0),
+            "binc" => binc = toks.next().and_then(|t| t.parse().ok()).unwrap_or(0),
             "movestogo" => movestogo = toks.next().and_then(|t| t.parse().ok()).unwrap_or(30),
-            "infinite"  => limits.depth = Some(64),
+            "infinite" => limits.depth = Some(64),
             _ => {}
         }
     }
@@ -155,23 +163,29 @@ mod tests {
     #[test]
     fn uci_smoke_bestmove() {
         let mut pos = Position::startpos();
-        let legal   = legal_moves(&pos);
-        let mut s   = Searcher::new();
-        let info    = s.search(&mut pos, &Limits { depth: Some(3), ..Default::default() });
-        let best    = info.best_move.unwrap();
+        let legal = legal_moves(&pos);
+        let mut s = Searcher::new();
+        let info = s.search(
+            &mut pos,
+            &Limits {
+                depth: Some(3),
+                ..Default::default()
+            },
+        );
+        let best = info.best_move.unwrap();
         assert!(legal.contains(&best), "best move {best} should be legal");
     }
 
     #[test]
     fn parse_go_movetime() {
-        let pos    = Position::startpos();
+        let pos = Position::startpos();
         let limits = parse_go("movetime 500", &pos);
         assert_eq!(limits.move_time, Some(Duration::from_millis(500)));
     }
 
     #[test]
     fn parse_go_depth() {
-        let pos    = Position::startpos();
+        let pos = Position::startpos();
         let limits = parse_go("depth 7", &pos);
         assert_eq!(limits.depth, Some(7));
     }

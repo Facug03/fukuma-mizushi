@@ -3,13 +3,13 @@
 //! Strategy: generate pseudo-legal moves, then filter by legality (king not in
 //! check after the move).  For king moves we also pre-filter attacked squares.
 
+use super::moves::Move;
 use crate::attacks::{
     bishop_attacks, king_attacks, knight_attacks, pawn_attacks, queen_attacks, rook_attacks,
 };
 use crate::bitboard::Bitboard;
 use crate::position::{CastlingRights, Position};
 use crate::types::{Color, PieceType, Rank, Square};
-use super::moves::Move;
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -22,9 +22,13 @@ pub fn legal_moves(pos: &Position) -> Vec<Move> {
 
 /// Returns the number of leaf nodes at depth `depth` (for testing movegen).
 pub fn perft(pos: &mut Position, depth: u8) -> u64 {
-    if depth == 0 { return 1; }
+    if depth == 0 {
+        return 1;
+    }
     let moves = legal_moves(pos);
-    if depth == 1 { return moves.len() as u64; }
+    if depth == 1 {
+        return moves.len() as u64;
+    }
     let mut nodes = 0u64;
     for mv in moves {
         let undo = pos.make_move(mv);
@@ -37,17 +41,17 @@ pub fn perft(pos: &mut Position, depth: u8) -> u64 {
 // ── Internal generation ───────────────────────────────────────────────────────
 
 fn gen_all(pos: &Position, out: &mut Vec<Move>) {
-    let us   = pos.side_to_move;
+    let us = pos.side_to_move;
     let them = us.flip();
-    let occ  = pos.occupancy();
+    let occ = pos.occupancy();
     let ours = pos.bb_color[us as usize];
     let theirs = pos.bb_color[them as usize];
 
     gen_pawns(pos, us, occ, theirs, out);
     gen_piece(pos, us, PieceType::Knight, occ, ours, theirs, out);
     gen_piece(pos, us, PieceType::Bishop, occ, ours, theirs, out);
-    gen_piece(pos, us, PieceType::Rook,   occ, ours, theirs, out);
-    gen_piece(pos, us, PieceType::Queen,  occ, ours, theirs, out);
+    gen_piece(pos, us, PieceType::Rook, occ, ours, theirs, out);
+    gen_piece(pos, us, PieceType::Queen, occ, ours, theirs, out);
     gen_king(pos, us, occ, ours, theirs, out);
     gen_castling(pos, us, occ, out);
 
@@ -64,16 +68,33 @@ fn gen_all(pos: &Position, out: &mut Vec<Move>) {
 
 fn gen_pawns(pos: &Position, us: Color, occ: Bitboard, theirs: Bitboard, out: &mut Vec<Move>) {
     let pawns = pos.piece_bb(us, PieceType::Pawn);
-    let promo_rank = if us == Color::White { Rank::R8 } else { Rank::R1 };
+    let promo_rank = if us == Color::White {
+        Rank::R8
+    } else {
+        Rank::R1
+    };
 
     for sq in pawns {
         // Pushes
-        let push1 = (if us == Color::White { Bitboard::from_sq(sq).north() }
-                     else                  { Bitboard::from_sq(sq).south() }) & !occ;
-        let on_start = if us == Color::White { sq.rank() == Rank::R2 } else { sq.rank() == Rank::R7 };
+        let push1 = (if us == Color::White {
+            Bitboard::from_sq(sq).north()
+        } else {
+            Bitboard::from_sq(sq).south()
+        }) & !occ;
+        let on_start = if us == Color::White {
+            sq.rank() == Rank::R2
+        } else {
+            sq.rank() == Rank::R7
+        };
         let push2 = if on_start {
-            (if us == Color::White { push1.north() } else { push1.south() }) & !occ
-        } else { Bitboard::EMPTY };
+            (if us == Color::White {
+                push1.north()
+            } else {
+                push1.south()
+            }) & !occ
+        } else {
+            Bitboard::EMPTY
+        };
 
         for to in push1 {
             add_pawn_move(sq, to, to.rank() == promo_rank, false, out);
@@ -100,56 +121,91 @@ fn gen_pawns(pos: &Position, us: Color, occ: Bitboard, theirs: Bitboard, out: &m
 fn add_pawn_move(from: Square, to: Square, promo: bool, capture: bool, out: &mut Vec<Move>) {
     if promo {
         let bases = if capture {
-            [Move::PROMO_CAP_N, Move::PROMO_CAP_B, Move::PROMO_CAP_R, Move::PROMO_CAP_Q]
+            [
+                Move::PROMO_CAP_N,
+                Move::PROMO_CAP_B,
+                Move::PROMO_CAP_R,
+                Move::PROMO_CAP_Q,
+            ]
         } else {
             [Move::PROMO_N, Move::PROMO_B, Move::PROMO_R, Move::PROMO_Q]
         };
-        for f in bases { out.push(Move::new(from, to, f)); }
+        for f in bases {
+            out.push(Move::new(from, to, f));
+        }
     } else {
-        out.push(Move::new(from, to, if capture { Move::CAPTURE } else { Move::QUIET }));
+        out.push(Move::new(
+            from,
+            to,
+            if capture { Move::CAPTURE } else { Move::QUIET },
+        ));
     }
 }
 
 fn gen_piece(
-    pos: &Position, us: Color, kind: PieceType,
-    occ: Bitboard, ours: Bitboard, theirs: Bitboard,
+    pos: &Position,
+    us: Color,
+    kind: PieceType,
+    occ: Bitboard,
+    ours: Bitboard,
+    theirs: Bitboard,
     out: &mut Vec<Move>,
 ) {
     for sq in pos.piece_bb(us, kind) {
         let att = piece_attacks(kind, sq, occ) & !ours;
-        for to in att & !theirs { out.push(Move::new(sq, to, Move::QUIET)); }
-        for to in att &  theirs { out.push(Move::new(sq, to, Move::CAPTURE)); }
+        for to in att & !theirs {
+            out.push(Move::new(sq, to, Move::QUIET));
+        }
+        for to in att & theirs {
+            out.push(Move::new(sq, to, Move::CAPTURE));
+        }
     }
 }
 
 fn gen_king(
-    pos: &Position, us: Color,
-    _occ: Bitboard, ours: Bitboard, theirs: Bitboard,
+    pos: &Position,
+    us: Color,
+    _occ: Bitboard,
+    ours: Bitboard,
+    theirs: Bitboard,
     out: &mut Vec<Move>,
 ) {
-    let sq  = pos.king_sq(us);
+    let sq = pos.king_sq(us);
     let att = king_attacks(sq) & !ours;
-    for to in att & !theirs { out.push(Move::new(sq, to, Move::QUIET)); }
-    for to in att &  theirs { out.push(Move::new(sq, to, Move::CAPTURE)); }
+    for to in att & !theirs {
+        out.push(Move::new(sq, to, Move::QUIET));
+    }
+    for to in att & theirs {
+        out.push(Move::new(sq, to, Move::CAPTURE));
+    }
 }
 
 fn gen_castling(pos: &Position, us: Color, occ: Bitboard, out: &mut Vec<Move>) {
     let them = us.flip();
-    let (king_sq, ks_rights, qs_rights,
-         ks_between, qs_between, qs_no_attack,
-         ks_to, qs_to) = if us == Color::White {
-        (Square::E1, CastlingRights::WK, CastlingRights::WQ,
-         sq_bb(Square::F1) | sq_bb(Square::G1),
-         sq_bb(Square::B1) | sq_bb(Square::C1) | sq_bb(Square::D1),
-         sq_bb(Square::C1) | sq_bb(Square::D1),
-         Square::G1, Square::C1)
-    } else {
-        (Square::E8, CastlingRights::BK, CastlingRights::BQ,
-         sq_bb(Square::F8) | sq_bb(Square::G8),
-         sq_bb(Square::B8) | sq_bb(Square::C8) | sq_bb(Square::D8),
-         sq_bb(Square::C8) | sq_bb(Square::D8),
-         Square::G8, Square::C8)
-    };
+    let (king_sq, ks_rights, qs_rights, ks_between, qs_between, qs_no_attack, ks_to, qs_to) =
+        if us == Color::White {
+            (
+                Square::E1,
+                CastlingRights::WK,
+                CastlingRights::WQ,
+                sq_bb(Square::F1) | sq_bb(Square::G1),
+                sq_bb(Square::B1) | sq_bb(Square::C1) | sq_bb(Square::D1),
+                sq_bb(Square::C1) | sq_bb(Square::D1),
+                Square::G1,
+                Square::C1,
+            )
+        } else {
+            (
+                Square::E8,
+                CastlingRights::BK,
+                CastlingRights::BQ,
+                sq_bb(Square::F8) | sq_bb(Square::G8),
+                sq_bb(Square::B8) | sq_bb(Square::C8) | sq_bb(Square::D8),
+                sq_bb(Square::C8) | sq_bb(Square::D8),
+                Square::G8,
+                Square::C8,
+            )
+        };
 
     if pos.castling.has(ks_rights)
         && (occ & ks_between).is_empty()
@@ -172,11 +228,27 @@ fn gen_castling(pos: &Position, us: Color, occ: Bitboard, out: &mut Vec<Move>) {
 
 pub fn is_attacked(pos: &Position, sq: Square, by: Color) -> bool {
     let occ = pos.occupancy();
-    if !(knight_attacks(sq) & pos.piece_bb(by, PieceType::Knight)).is_empty() { return true; }
-    if !(king_attacks(sq)   & pos.piece_bb(by, PieceType::King)).is_empty()   { return true; }
-    if !(pawn_attacks(sq, by.flip()) & pos.piece_bb(by, PieceType::Pawn)).is_empty() { return true; }
-    if !(rook_attacks(sq, occ)   & (pos.piece_bb(by, PieceType::Rook)  | pos.piece_bb(by, PieceType::Queen))).is_empty() { return true; }
-    if !(bishop_attacks(sq, occ) & (pos.piece_bb(by, PieceType::Bishop)| pos.piece_bb(by, PieceType::Queen))).is_empty() { return true; }
+    if !(knight_attacks(sq) & pos.piece_bb(by, PieceType::Knight)).is_empty() {
+        return true;
+    }
+    if !(king_attacks(sq) & pos.piece_bb(by, PieceType::King)).is_empty() {
+        return true;
+    }
+    if !(pawn_attacks(sq, by.flip()) & pos.piece_bb(by, PieceType::Pawn)).is_empty() {
+        return true;
+    }
+    if !(rook_attacks(sq, occ)
+        & (pos.piece_bb(by, PieceType::Rook) | pos.piece_bb(by, PieceType::Queen)))
+    .is_empty()
+    {
+        return true;
+    }
+    if !(bishop_attacks(sq, occ)
+        & (pos.piece_bb(by, PieceType::Bishop) | pos.piece_bb(by, PieceType::Queen)))
+    .is_empty()
+    {
+        return true;
+    }
     false
 }
 
@@ -184,14 +256,16 @@ fn squares_attacked(pos: &Position, sqs: Bitboard, by: Color) -> bool {
     sqs.into_iter().any(|sq| is_attacked(pos, sq, by))
 }
 
-fn sq_bb(sq: Square) -> Bitboard { Bitboard::from_sq(sq) }
+fn sq_bb(sq: Square) -> Bitboard {
+    Bitboard::from_sq(sq)
+}
 
 fn piece_attacks(kind: PieceType, sq: Square, occ: Bitboard) -> Bitboard {
     match kind {
         PieceType::Knight => knight_attacks(sq),
         PieceType::Bishop => bishop_attacks(sq, occ),
-        PieceType::Rook   => rook_attacks(sq, occ),
-        PieceType::Queen  => queen_attacks(sq, occ),
+        PieceType::Rook => rook_attacks(sq, occ),
+        PieceType::Queen => queen_attacks(sq, occ),
         _ => Bitboard::EMPTY,
     }
 }

@@ -9,12 +9,12 @@ use crate::types::{Color, PieceType};
 // ── Material values (mg, eg) ──────────────────────────────────────────────────
 
 const PIECE_VALUE: [(i32, i32); 6] = [
-    (82,  94),   // Pawn
+    (82, 94),    // Pawn
     (337, 281),  // Knight
     (365, 297),  // Bishop
     (477, 512),  // Rook
     (1025, 936), // Queen
-    (0,   0),    // King (handled by checkmate logic)
+    (0, 0),      // King (handled by checkmate logic)
 ];
 
 // ── Piece-square tables (from White's perspective, a1=index 0) ────────────────
@@ -154,7 +154,9 @@ fn game_phase(pos: &Position) -> i32 {
 
 /// Mirrors a square index for Black (so PST stays in White's orientation).
 #[inline]
-fn mirror(sq: usize) -> usize { sq ^ 56 }
+fn mirror(sq: usize) -> usize {
+    sq ^ 56
+}
 
 pub fn evaluate(pos: &Position) -> i32 {
     let phase = game_phase(pos);
@@ -165,7 +167,11 @@ pub fn evaluate(pos: &Position) -> i32 {
         for kind in PieceType::ALL {
             let (mv, ev) = PIECE_VALUE[kind as usize];
             for sq in pos.piece_bb(color, kind) {
-                let idx = if color == Color::White { sq.index() } else { mirror(sq.index()) };
+                let idx = if color == Color::White {
+                    sq.index()
+                } else {
+                    mirror(sq.index())
+                };
                 mg[color as usize] += mv + PST_MG[kind as usize][idx];
                 eg[color as usize] += ev + PST_EG[kind as usize][idx];
             }
@@ -178,7 +184,11 @@ pub fn evaluate(pos: &Position) -> i32 {
     let score = (mg_score * phase + eg_score * (MAX_PHASE - phase)) / MAX_PHASE;
 
     // Return from the perspective of the side to move.
-    if pos.side_to_move == Color::White { score } else { -score }
+    if pos.side_to_move == Color::White {
+        score
+    } else {
+        -score
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -192,7 +202,10 @@ mod tests {
     fn startpos_is_near_zero() {
         let score = evaluate(&Position::startpos());
         // Should be small (PeSTO gives a small advantage for white at startpos).
-        assert!(score.abs() < 50, "startpos score {score} should be near zero");
+        assert!(
+            score.abs() < 50,
+            "startpos score {score} should be near zero"
+        );
     }
 
     #[test]
@@ -210,8 +223,10 @@ mod tests {
         let b_fen = "4kr2/8/8/8/8/8/8/4K3 b - - 0 1";
         let w_score = evaluate(&Position::from_fen(w_fen).unwrap());
         let b_score = evaluate(&Position::from_fen(b_fen).unwrap());
-        assert_eq!(w_score, b_score,
-            "symmetric positions should give equal scores from side-to-move perspective");
+        assert_eq!(
+            w_score, b_score,
+            "symmetric positions should give equal scores from side-to-move perspective"
+        );
     }
 
     #[test]
@@ -220,6 +235,9 @@ mod tests {
         // (black is down material relative to white).
         let fen = "4k3/8/8/8/8/8/8/4KQ2 b - - 0 1";
         let pos = Position::from_fen(fen).unwrap();
-        assert!(evaluate(&pos) < 0, "black to move with white queen ahead should be negative");
+        assert!(
+            evaluate(&pos) < 0,
+            "black to move with white queen ahead should be negative"
+        );
     }
 }

@@ -28,8 +28,11 @@ fn rays(sq: Square, occ: Bitboard, dirs: &[(i8, i8)]) -> Bitboard {
         while (0..8).contains(&rr) && (0..8).contains(&ff) {
             let bit = 1u64 << (rr * 8 + ff);
             att |= bit;
-            if occ.0 & bit != 0 { break; }
-            rr += dr; ff += df;
+            if occ.0 & bit != 0 {
+                break;
+            }
+            rr += dr;
+            ff += df;
         }
     }
     Bitboard(att)
@@ -41,8 +44,16 @@ fn rook_mask(sq: Square) -> u64 {
     let r = sq.rank().0;
     let f = sq.file().0;
     let mut mask = 0u64;
-    for ff in 1..7u8 { if ff != f { mask |= 1u64 << (r * 8 + ff); } }
-    for rr in 1..7u8 { if rr != r { mask |= 1u64 << (rr * 8 + f); } }
+    for ff in 1..7u8 {
+        if ff != f {
+            mask |= 1u64 << (r * 8 + ff);
+        }
+    }
+    for rr in 1..7u8 {
+        if rr != r {
+            mask |= 1u64 << (rr * 8 + f);
+        }
+    }
     mask
 }
 
@@ -54,7 +65,8 @@ fn bishop_mask(sq: Square) -> u64 {
         let (mut rr, mut ff) = (r + dr, f + df);
         while rr > 0 && rr < 7 && ff > 0 && ff < 7 {
             mask |= 1u64 << (rr * 8 + ff);
-            rr += dr; ff += df;
+            rr += dr;
+            ff += df;
         }
     }
     mask
@@ -70,8 +82,8 @@ fn xorshift(s: &mut u64) -> u64 {
 }
 
 fn find_magic(sq: Square, mask: u64, is_rook: bool, rng: &mut u64) -> u64 {
-    let bits  = mask.count_ones() as usize;
-    let size  = 1usize << bits;
+    let bits = mask.count_ones() as usize;
+    let size = 1usize << bits;
     let shift = (64 - bits) as u32;
 
     // Enumerate all occupancy subsets and their attacks (Carry-Rippler).
@@ -91,7 +103,9 @@ fn find_magic(sq: Square, mask: u64, is_rook: bool, rng: &mut u64) -> u64 {
     loop {
         // Sparse magic candidate.
         let magic = xorshift(rng) & xorshift(rng) & xorshift(rng);
-        if (mask.wrapping_mul(magic) >> 56).count_ones() < 6 { continue; }
+        if (mask.wrapping_mul(magic) >> 56).count_ones() < 6 {
+            continue;
+        }
 
         let mut used = vec![u64::MAX; size];
         let mut ok = true;
@@ -104,16 +118,18 @@ fn find_magic(sq: Square, mask: u64, is_rook: bool, rng: &mut u64) -> u64 {
                 break;
             }
         }
-        if ok { return magic; }
+        if ok {
+            return magic;
+        }
     }
 }
 
 // ── Magic table ───────────────────────────────────────────────────────────────
 
 struct MagicEntry {
-    mask:   u64,
-    magic:  u64,
-    shift:  u32,
+    mask: u64,
+    magic: u64,
+    shift: u32,
     offset: usize,
 }
 
@@ -128,10 +144,14 @@ fn build_table(is_rook: bool) -> MagicTable {
     let mut rng = 0x123456789ABCDEF0u64;
 
     for i in 0u8..64 {
-        let sq    = Square::new(i);
-        let mask  = if is_rook { rook_mask(sq) } else { bishop_mask(sq) };
-        let bits  = mask.count_ones() as usize;
-        let size  = 1usize << bits;
+        let sq = Square::new(i);
+        let mask = if is_rook {
+            rook_mask(sq)
+        } else {
+            bishop_mask(sq)
+        };
+        let bits = mask.count_ones() as usize;
+        let size = 1usize << bits;
         let shift = (64 - bits) as u32;
         let magic = find_magic(sq, mask, is_rook, &mut rng);
 
@@ -148,20 +168,31 @@ fn build_table(is_rook: bool) -> MagicTable {
                 slow_bishop_attacks(sq, Bitboard(occ))
             };
             occ = occ.wrapping_sub(mask) & mask;
-            if occ == 0 { break; }
+            if occ == 0 {
+                break;
+            }
         }
 
-        entries.push(MagicEntry { mask, magic, shift, offset });
+        entries.push(MagicEntry {
+            mask,
+            magic,
+            shift,
+            offset,
+        });
     }
 
     MagicTable { entries, attacks }
 }
 
-static ROOK_TABLE:   OnceLock<MagicTable> = OnceLock::new();
+static ROOK_TABLE: OnceLock<MagicTable> = OnceLock::new();
 static BISHOP_TABLE: OnceLock<MagicTable> = OnceLock::new();
 
-fn rook_table()   -> &'static MagicTable { ROOK_TABLE.get_or_init(|| build_table(true))  }
-fn bishop_table() -> &'static MagicTable { BISHOP_TABLE.get_or_init(|| build_table(false)) }
+fn rook_table() -> &'static MagicTable {
+    ROOK_TABLE.get_or_init(|| build_table(true))
+}
+fn bishop_table() -> &'static MagicTable {
+    BISHOP_TABLE.get_or_init(|| build_table(false))
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -194,8 +225,12 @@ mod tests {
 
     fn verify_all(is_rook: bool) {
         for i in 0u8..64 {
-            let sq   = Square::new(i);
-            let mask = if is_rook { rook_mask(sq) } else { bishop_mask(sq) };
+            let sq = Square::new(i);
+            let mask = if is_rook {
+                rook_mask(sq)
+            } else {
+                bishop_mask(sq)
+            };
             let mut occ = 0u64;
             loop {
                 let expected = if is_rook {
@@ -208,20 +243,29 @@ mod tests {
                 } else {
                     bishop_attacks(sq, Bitboard(occ))
                 };
-                assert_eq!(got, expected,
+                assert_eq!(
+                    got,
+                    expected,
                     "{} sq={sq:?} occ={occ:#018x}",
-                    if is_rook { "rook" } else { "bishop" });
+                    if is_rook { "rook" } else { "bishop" }
+                );
                 occ = occ.wrapping_sub(mask) & mask;
-                if occ == 0 { break; }
+                if occ == 0 {
+                    break;
+                }
             }
         }
     }
 
     #[test]
-    fn rook_magic_matches_slow_all_squares() { verify_all(true); }
+    fn rook_magic_matches_slow_all_squares() {
+        verify_all(true);
+    }
 
     #[test]
-    fn bishop_magic_matches_slow_all_squares() { verify_all(false); }
+    fn bishop_magic_matches_slow_all_squares() {
+        verify_all(false);
+    }
 
     #[test]
     fn rook_a1_empty_board() {
@@ -235,8 +279,8 @@ mod tests {
     fn rook_blocked() {
         let occ = Bitboard::from_sq(Square::A4);
         let att = rook_attacks(Square::A1, occ);
-        assert!(att.contains(Square::A4));   // blocker included
-        assert!(!att.contains(Square::A5));  // behind blocker: excluded
+        assert!(att.contains(Square::A4)); // blocker included
+        assert!(!att.contains(Square::A5)); // behind blocker: excluded
     }
 
     #[test]

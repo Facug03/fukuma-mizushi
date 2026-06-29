@@ -8,18 +8,26 @@ pub struct CastlingRights(pub u8);
 
 impl CastlingRights {
     pub const NONE: Self = Self(0b0000);
-    pub const WK:   Self = Self(0b0001);
-    pub const WQ:   Self = Self(0b0010);
-    pub const BK:   Self = Self(0b0100);
-    pub const BQ:   Self = Self(0b1000);
-    pub const ALL:  Self = Self(0b1111);
+    pub const WK: Self = Self(0b0001);
+    pub const WQ: Self = Self(0b0010);
+    pub const BK: Self = Self(0b0100);
+    pub const BQ: Self = Self(0b1000);
+    pub const ALL: Self = Self(0b1111);
 
-    #[inline] pub fn has(self, r: Self) -> bool { self.0 & r.0 != 0 }
-    #[inline] pub fn remove(self, r: Self) -> Self { Self(self.0 & !r.0) }
+    #[inline]
+    pub fn has(self, r: Self) -> bool {
+        self.0 & r.0 != 0
+    }
+    #[inline]
+    pub fn remove(self, r: Self) -> Self {
+        Self(self.0 & !r.0)
+    }
 }
 
 impl std::ops::BitOrAssign for CastlingRights {
-    fn bitor_assign(&mut self, r: Self) { self.0 |= r.0; }
+    fn bitor_assign(&mut self, r: Self) {
+        self.0 |= r.0;
+    }
 }
 
 // ── Position ──────────────────────────────────────────────────────────────────
@@ -40,10 +48,11 @@ pub struct Position {
 }
 
 impl Position {
-    pub const STARTPOS: &'static str =
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    pub const STARTPOS: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-    pub fn startpos() -> Self { Self::from_fen(Self::STARTPOS).unwrap() }
+    pub fn startpos() -> Self {
+        Self::from_fen(Self::STARTPOS).unwrap()
+    }
 
     #[inline]
     pub fn piece_bb(&self, color: Color, kind: PieceType) -> Bitboard {
@@ -51,7 +60,9 @@ impl Position {
     }
 
     #[inline]
-    pub fn occupancy(&self) -> Bitboard { self.bb_color[0] | self.bb_color[1] }
+    pub fn occupancy(&self) -> Bitboard {
+        self.bb_color[0] | self.bb_color[1]
+    }
 
     #[inline]
     pub fn king_sq(&self, color: Color) -> Square {
@@ -59,9 +70,13 @@ impl Position {
     }
 
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
-        let color = if self.bb_color[0].contains(sq) { Color::White }
-                    else if self.bb_color[1].contains(sq) { Color::Black }
-                    else { return None };
+        let color = if self.bb_color[0].contains(sq) {
+            Color::White
+        } else if self.bb_color[1].contains(sq) {
+            Color::Black
+        } else {
+            return None;
+        };
         for kind in PieceType::ALL {
             if self.bb_piece[kind as usize].contains(sq) {
                 return Some(Piece::new(color, kind));
@@ -84,8 +99,12 @@ impl Position {
             self.hash ^= crate::zobrist::piece_key(piece.color, piece.kind, sq);
         }
         let mask = !Bitboard::from_sq(sq);
-        for b in &mut self.bb_piece { *b &= mask; }
-        for b in &mut self.bb_color { *b &= mask; }
+        for b in &mut self.bb_piece {
+            *b &= mask;
+        }
+        for b in &mut self.bb_color {
+            *b &= mask;
+        }
     }
 
     pub fn render_ascii(&self) -> String {
@@ -119,7 +138,9 @@ pub enum FenError {
 }
 
 impl std::fmt::Display for FenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{self:?}") }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 impl std::error::Error for FenError {}
 
@@ -127,18 +148,18 @@ impl Position {
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
         let mut parts = fen.split_ascii_whitespace();
         let placement = parts.next().ok_or(FenError::TooFewParts)?;
-        let stm       = parts.next().ok_or(FenError::TooFewParts)?;
-        let castling  = parts.next().ok_or(FenError::TooFewParts)?;
-        let ep        = parts.next().ok_or(FenError::TooFewParts)?;
-        let halfmove  = parts.next().unwrap_or("0");
-        let fullmove  = parts.next().unwrap_or("1");
+        let stm = parts.next().ok_or(FenError::TooFewParts)?;
+        let castling = parts.next().ok_or(FenError::TooFewParts)?;
+        let ep = parts.next().ok_or(FenError::TooFewParts)?;
+        let halfmove = parts.next().unwrap_or("0");
+        let fullmove = parts.next().unwrap_or("1");
 
         let mut pos = Self {
-            bb_piece:       [Bitboard::EMPTY; 6],
-            bb_color:       [Bitboard::EMPTY; 2],
-            side_to_move:   Color::White,
-            castling:       CastlingRights::NONE,
-            en_passant:     None,
+            bb_piece: [Bitboard::EMPTY; 6],
+            bb_color: [Bitboard::EMPTY; 2],
+            side_to_move: Color::White,
+            castling: CastlingRights::NONE,
+            en_passant: None,
             halfmove_clock: 0,
             fullmove_number: 1,
             hash: 0,
@@ -151,8 +172,8 @@ impl Position {
                 '/' => sq -= 16,
                 '1'..='8' => sq += (ch as u8 - b'0') as i8,
                 _ => {
-                    let (color, kind) = piece_from_char(ch)
-                        .ok_or(FenError::InvalidPiecePlacement)?;
+                    let (color, kind) =
+                        piece_from_char(ch).ok_or(FenError::InvalidPiecePlacement)?;
                     pos.put(Square::new(sq as u8), Piece::new(color, kind));
                     sq += 1;
                 }
@@ -162,7 +183,7 @@ impl Position {
         pos.side_to_move = match stm {
             "w" => Color::White,
             "b" => Color::Black,
-            _   => return Err(FenError::InvalidSideToMove),
+            _ => return Err(FenError::InvalidSideToMove),
         };
 
         if castling != "-" {
@@ -172,20 +193,28 @@ impl Position {
                     'Q' => CastlingRights::WQ,
                     'k' => CastlingRights::BK,
                     'q' => CastlingRights::BQ,
-                    _   => return Err(FenError::InvalidCastling),
+                    _ => return Err(FenError::InvalidCastling),
                 };
             }
         }
 
         if ep != "-" {
             let b = ep.as_bytes();
-            if b.len() < 2 { return Err(FenError::InvalidEnPassant); }
-            let file = b[0].checked_sub(b'a').filter(|&f| f < 8).ok_or(FenError::InvalidEnPassant)?;
-            let rank = b[1].checked_sub(b'1').filter(|&r| r < 8).ok_or(FenError::InvalidEnPassant)?;
+            if b.len() < 2 {
+                return Err(FenError::InvalidEnPassant);
+            }
+            let file = b[0]
+                .checked_sub(b'a')
+                .filter(|&f| f < 8)
+                .ok_or(FenError::InvalidEnPassant)?;
+            let rank = b[1]
+                .checked_sub(b'1')
+                .filter(|&r| r < 8)
+                .ok_or(FenError::InvalidEnPassant)?;
             pos.en_passant = Some(Square::from_file_rank(File(file), Rank(rank)));
         }
 
-        pos.halfmove_clock  = halfmove.parse().map_err(|_| FenError::InvalidHalfmove)?;
+        pos.halfmove_clock = halfmove.parse().map_err(|_| FenError::InvalidHalfmove)?;
         pos.fullmove_number = fullmove.parse().map_err(|_| FenError::InvalidFullmove)?;
         pos.hash = crate::zobrist::hash_from_scratch(&pos);
         Ok(pos)
@@ -200,27 +229,46 @@ impl Position {
                 let sq = Square::from_file_rank(File(file), Rank(rank));
                 match self.piece_at(sq) {
                     Some(p) => {
-                        if empty > 0 { fen.push((b'0' + empty) as char); empty = 0; }
+                        if empty > 0 {
+                            fen.push((b'0' + empty) as char);
+                            empty = 0;
+                        }
                         fen.push(piece_to_char(p));
                     }
                     None => empty += 1,
                 }
             }
-            if empty > 0 { fen.push((b'0' + empty) as char); }
-            if rank > 0 { fen.push('/'); }
+            if empty > 0 {
+                fen.push((b'0' + empty) as char);
+            }
+            if rank > 0 {
+                fen.push('/');
+            }
         }
 
         fen.push(' ');
-        fen.push(if self.side_to_move == Color::White { 'w' } else { 'b' });
+        fen.push(if self.side_to_move == Color::White {
+            'w'
+        } else {
+            'b'
+        });
 
         fen.push(' ');
         if self.castling == CastlingRights::NONE {
             fen.push('-');
         } else {
-            if self.castling.has(CastlingRights::WK) { fen.push('K'); }
-            if self.castling.has(CastlingRights::WQ) { fen.push('Q'); }
-            if self.castling.has(CastlingRights::BK) { fen.push('k'); }
-            if self.castling.has(CastlingRights::BQ) { fen.push('q'); }
+            if self.castling.has(CastlingRights::WK) {
+                fen.push('K');
+            }
+            if self.castling.has(CastlingRights::WQ) {
+                fen.push('Q');
+            }
+            if self.castling.has(CastlingRights::BK) {
+                fen.push('k');
+            }
+            if self.castling.has(CastlingRights::BQ) {
+                fen.push('q');
+            }
         }
 
         fen.push(' ');
@@ -243,23 +291,37 @@ impl Position {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn piece_from_char(ch: char) -> Option<(Color, PieceType)> {
-    let color = if ch.is_uppercase() { Color::White } else { Color::Black };
+    let color = if ch.is_uppercase() {
+        Color::White
+    } else {
+        Color::Black
+    };
     let kind = match ch.to_ascii_lowercase() {
-        'p' => PieceType::Pawn,   'n' => PieceType::Knight,
-        'b' => PieceType::Bishop, 'r' => PieceType::Rook,
-        'q' => PieceType::Queen,  'k' => PieceType::King,
-        _   => return None,
+        'p' => PieceType::Pawn,
+        'n' => PieceType::Knight,
+        'b' => PieceType::Bishop,
+        'r' => PieceType::Rook,
+        'q' => PieceType::Queen,
+        'k' => PieceType::King,
+        _ => return None,
     };
     Some((color, kind))
 }
 
 pub fn piece_to_char(p: Piece) -> char {
     let ch = match p.kind {
-        PieceType::Pawn   => 'p', PieceType::Knight => 'n',
-        PieceType::Bishop => 'b', PieceType::Rook   => 'r',
-        PieceType::Queen  => 'q', PieceType::King   => 'k',
+        PieceType::Pawn => 'p',
+        PieceType::Knight => 'n',
+        PieceType::Bishop => 'b',
+        PieceType::Rook => 'r',
+        PieceType::Queen => 'q',
+        PieceType::King => 'k',
     };
-    if p.color == Color::White { ch.to_ascii_uppercase() } else { ch }
+    if p.color == Color::White {
+        ch.to_ascii_uppercase()
+    } else {
+        ch
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -268,10 +330,8 @@ pub fn piece_to_char(p: Piece) -> char {
 mod tests {
     use super::*;
 
-    const KIWIPETE: &str =
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-    const EP_FEN: &str =
-        "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+    const KIWIPETE: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+    const EP_FEN: &str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
 
     #[test]
     fn fen_roundtrip_startpos() {

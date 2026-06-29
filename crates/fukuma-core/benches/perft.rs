@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use fukuma_core::{movegen::perft, position::Position};
 
 fn bench_perft(c: &mut Criterion) {

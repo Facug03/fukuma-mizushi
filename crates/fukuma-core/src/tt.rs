@@ -5,30 +5,33 @@ use crate::movegen::Move;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Bound {
-    Exact  = 0,
-    Lower  = 1, // beta cut-off: score >= beta (lower bound)
-    Upper  = 2, // all-node: score <= alpha (upper bound)
+    Exact = 0,
+    Lower = 1, // beta cut-off: score >= beta (lower bound)
+    Upper = 2, // all-node: score <= alpha (upper bound)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TtEntry {
-    pub key:   u64,
+    pub key: u64,
     pub score: i32,
-    pub mv:    Move,
+    pub mv: Move,
     pub depth: u8,
     pub bound: u8, // Bound as u8 for Default
 }
 
 pub struct TranspositionTable {
     entries: Vec<TtEntry>,
-    mask:    usize,
+    mask: usize,
 }
 
 impl TranspositionTable {
     /// `size_mb`: approximate size in megabytes.
     pub fn new(size_mb: usize) -> Self {
         let capacity = (size_mb * 1024 * 1024 / std::mem::size_of::<TtEntry>()).next_power_of_two();
-        Self { entries: vec![TtEntry::default(); capacity], mask: capacity - 1 }
+        Self {
+            entries: vec![TtEntry::default(); capacity],
+            mask: capacity - 1,
+        }
     }
 
     #[inline]
@@ -42,12 +45,20 @@ impl TranspositionTable {
         let idx = key as usize & self.mask;
         // Always replace if deeper or same depth.
         if self.entries[idx].key != key || depth >= self.entries[idx].depth {
-            self.entries[idx] = TtEntry { key, score, mv, depth, bound: bound as u8 };
+            self.entries[idx] = TtEntry {
+                key,
+                score,
+                mv,
+                depth,
+                bound: bound as u8,
+            };
         }
     }
 
     pub fn clear(&mut self) {
-        self.entries.iter_mut().for_each(|e| *e = TtEntry::default());
+        self.entries
+            .iter_mut()
+            .for_each(|e| *e = TtEntry::default());
     }
 }
 
@@ -75,7 +86,7 @@ mod tests {
     #[test]
     fn deeper_entry_replaces_shallower() {
         let mut tt = TranspositionTable::new(1);
-        tt.store(0x1, 50,  Move::default(), 2, Bound::Exact);
+        tt.store(0x1, 50, Move::default(), 2, Bound::Exact);
         tt.store(0x1, 100, Move::default(), 5, Bound::Exact);
         assert_eq!(tt.probe(0x1).unwrap().score, 100);
     }

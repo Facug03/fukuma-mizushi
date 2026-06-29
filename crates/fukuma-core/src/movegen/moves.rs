@@ -6,21 +6,21 @@ pub struct Move(u16);
 
 /// Flag constants (4 bits).
 impl Move {
-    pub const QUIET:         u16 = 0b0000;
-    pub const DOUBLE_PUSH:   u16 = 0b0001;
-    pub const CASTLE_K:      u16 = 0b0010;
-    pub const CASTLE_Q:      u16 = 0b0011;
-    pub const CAPTURE:       u16 = 0b0100;
-    pub const EP_CAPTURE:    u16 = 0b0101;
+    pub const QUIET: u16 = 0b0000;
+    pub const DOUBLE_PUSH: u16 = 0b0001;
+    pub const CASTLE_K: u16 = 0b0010;
+    pub const CASTLE_Q: u16 = 0b0011;
+    pub const CAPTURE: u16 = 0b0100;
+    pub const EP_CAPTURE: u16 = 0b0101;
     // Promotions (bit 3 set = promotion, bit 2 = capture+promo)
-    pub const PROMO_N:       u16 = 0b1000;
-    pub const PROMO_B:       u16 = 0b1001;
-    pub const PROMO_R:       u16 = 0b1010;
-    pub const PROMO_Q:       u16 = 0b1011;
-    pub const PROMO_CAP_N:   u16 = 0b1100;
-    pub const PROMO_CAP_B:   u16 = 0b1101;
-    pub const PROMO_CAP_R:   u16 = 0b1110;
-    pub const PROMO_CAP_Q:   u16 = 0b1111;
+    pub const PROMO_N: u16 = 0b1000;
+    pub const PROMO_B: u16 = 0b1001;
+    pub const PROMO_R: u16 = 0b1010;
+    pub const PROMO_Q: u16 = 0b1011;
+    pub const PROMO_CAP_N: u16 = 0b1100;
+    pub const PROMO_CAP_B: u16 = 0b1101;
+    pub const PROMO_CAP_R: u16 = 0b1110;
+    pub const PROMO_CAP_Q: u16 = 0b1111;
 
     pub const NULL: Move = Move(0);
 
@@ -29,13 +29,32 @@ impl Move {
         Move((from.as_u8() as u16) | ((to.as_u8() as u16) << 6) | (flags << 12))
     }
 
-    #[inline] pub fn from(self) -> Square   { Square::new((self.0 & 0x3F) as u8) }
-    #[inline] pub fn to(self) -> Square     { Square::new(((self.0 >> 6) & 0x3F) as u8) }
-    #[inline] pub fn flags(self) -> u16     { self.0 >> 12 }
-    #[inline] pub fn is_capture(self) -> bool  { self.flags() & 0b0100 != 0 }
-    #[inline] pub fn is_promo(self) -> bool    { self.flags() & 0b1000 != 0 }
-    #[inline] pub fn is_ep(self) -> bool       { self.flags() == Self::EP_CAPTURE }
-    #[inline] pub fn is_castle(self) -> bool   {
+    #[inline]
+    pub fn from(self) -> Square {
+        Square::new((self.0 & 0x3F) as u8)
+    }
+    #[inline]
+    pub fn to(self) -> Square {
+        Square::new(((self.0 >> 6) & 0x3F) as u8)
+    }
+    #[inline]
+    pub fn flags(self) -> u16 {
+        self.0 >> 12
+    }
+    #[inline]
+    pub fn is_capture(self) -> bool {
+        self.flags() & 0b0100 != 0
+    }
+    #[inline]
+    pub fn is_promo(self) -> bool {
+        self.flags() & 0b1000 != 0
+    }
+    #[inline]
+    pub fn is_ep(self) -> bool {
+        self.flags() == Self::EP_CAPTURE
+    }
+    #[inline]
+    pub fn is_castle(self) -> bool {
         self.flags() == Self::CASTLE_K || self.flags() == Self::CASTLE_Q
     }
 
@@ -54,7 +73,7 @@ impl Move {
 impl std::fmt::Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let from = self.from();
-        let to   = self.to();
+        let to = self.to();
         let fc = (b'a' + from.file().0) as char;
         let fr = (b'1' + from.rank().0) as char;
         let tc = (b'a' + to.file().0) as char;
@@ -62,8 +81,10 @@ impl std::fmt::Display for Move {
         write!(f, "{fc}{fr}{tc}{tr}")?;
         if self.is_promo() {
             let p = match self.promo_piece() {
-                PieceType::Knight => 'n', PieceType::Bishop => 'b',
-                PieceType::Rook   => 'r', _                 => 'q',
+                PieceType::Knight => 'n',
+                PieceType::Bishop => 'b',
+                PieceType::Rook => 'r',
+                _ => 'q',
             };
             write!(f, "{p}")?;
         }
@@ -80,7 +101,7 @@ mod tests {
     fn move_encoding_roundtrip() {
         let m = Move::new(Square::E2, Square::E4, Move::DOUBLE_PUSH);
         assert_eq!(m.from(), Square::E2);
-        assert_eq!(m.to(),   Square::E4);
+        assert_eq!(m.to(), Square::E4);
         assert_eq!(m.flags(), Move::DOUBLE_PUSH);
         assert!(!m.is_capture());
         assert!(!m.is_promo());
@@ -112,7 +133,7 @@ mod tests {
             for j in 0u8..64 {
                 let m = Move::new(Square::new(i), Square::new(j), Move::QUIET);
                 assert_eq!(m.from(), Square::new(i));
-                assert_eq!(m.to(),   Square::new(j));
+                assert_eq!(m.to(), Square::new(j));
             }
         }
     }

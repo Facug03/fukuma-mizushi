@@ -35,20 +35,33 @@ const fn gen_keys() -> ZobristKeys {
 
     let mut castling = [0u64; 16];
     let mut i = 0usize;
-    while i < 16 { s = xorshift(s); castling[i] = s; i += 1; }
+    while i < 16 {
+        s = xorshift(s);
+        castling[i] = s;
+        i += 1;
+    }
 
     let mut en_passant = [0u64; 8];
     let mut f = 0usize;
-    while f < 8 { s = xorshift(s); en_passant[f] = s; f += 1; }
+    while f < 8 {
+        s = xorshift(s);
+        en_passant[f] = s;
+        f += 1;
+    }
 
     s = xorshift(s);
-    ZobristKeys { pieces, castling, en_passant, side_to_move: s }
+    ZobristKeys {
+        pieces,
+        castling,
+        en_passant,
+        side_to_move: s,
+    }
 }
 
 struct ZobristKeys {
-    pieces:       [[[u64; 64]; 6]; 2],
-    castling:     [u64; 16],
-    en_passant:   [u64; 8],
+    pieces: [[[u64; 64]; 6]; 2],
+    castling: [u64; 16],
+    en_passant: [u64; 8],
     side_to_move: u64,
 }
 
@@ -87,8 +100,12 @@ pub fn hash_from_scratch(pos: &crate::position::Position) -> u64 {
         }
     }
     h ^= castling_key(pos.castling.0);
-    if let Some(ep) = pos.en_passant { h ^= ep_key(ep); }
-    if pos.side_to_move == Color::Black { h ^= side_key(); }
+    if let Some(ep) = pos.en_passant {
+        h ^= ep_key(ep);
+    }
+    if pos.side_to_move == Color::Black {
+        h ^= side_key();
+    }
     h
 }
 
@@ -116,13 +133,12 @@ mod tests {
         for mv in [
             Move::new(Square::new(12), Square::new(28), Move::DOUBLE_PUSH), // e2e4
             Move::new(Square::new(52), Square::new(36), Move::DOUBLE_PUSH), // e7e5
-            Move::new(Square::new(6),  Square::new(21), Move::QUIET),       // g1f3
+            Move::new(Square::new(6), Square::new(21), Move::QUIET),        // g1f3
         ] {
             pos.make_move(mv);
             let incremental = pos.hash;
             let scratch = hash_from_scratch(&pos);
-            assert_eq!(incremental, scratch,
-                "incremental hash mismatch after {mv}");
+            assert_eq!(incremental, scratch, "incremental hash mismatch after {mv}");
         }
     }
 

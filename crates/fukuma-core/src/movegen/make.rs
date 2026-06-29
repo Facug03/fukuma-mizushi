@@ -1,16 +1,16 @@
+use super::moves::Move;
 use crate::position::{CastlingRights, Position};
 use crate::types::{Color, Piece, PieceType, Rank, Square};
-use super::moves::Move;
 
 /// Everything needed to fully undo a move.
 #[derive(Clone, Copy, Debug)]
 pub struct UndoState {
-    pub moved_kind: PieceType,       // original piece type (pre-promotion)
-    pub captured:   Option<Piece>,
-    pub castling:   CastlingRights,
+    pub moved_kind: PieceType, // original piece type (pre-promotion)
+    pub captured: Option<Piece>,
+    pub castling: CastlingRights,
     pub en_passant: Option<Square>,
-    pub halfmove:   u8,
-    pub hash:       u64,             // full hash before the move
+    pub halfmove: u8,
+    pub hash: u64, // full hash before the move
 }
 
 /// Per-square castling-rights mask: AND this when a piece leaves/arrives at that square.
@@ -27,30 +27,32 @@ const CASTLING_MASK: [u8; 64] = {
 
 impl Position {
     pub fn make_move(&mut self, mv: Move) -> UndoState {
-        let us   = self.side_to_move;
+        let us = self.side_to_move;
         let them = us.flip();
         let from = mv.from();
-        let to   = mv.to();
+        let to = mv.to();
 
         let moving = self.piece_at(from).expect("make_move: empty from-square");
         let undo = UndoState {
             moved_kind: moving.kind,
-            captured:   None,
-            castling:   self.castling,
+            captured: None,
+            castling: self.castling,
             en_passant: self.en_passant,
-            halfmove:   self.halfmove_clock,
-            hash:       self.hash,
+            halfmove: self.halfmove_clock,
+            hash: self.hash,
         };
 
         // XOR out old castling and EP keys before modifying.
         self.hash ^= crate::zobrist::castling_key(self.castling.0);
-        if let Some(ep) = self.en_passant { self.hash ^= crate::zobrist::ep_key(ep); }
+        if let Some(ep) = self.en_passant {
+            self.hash ^= crate::zobrist::ep_key(ep);
+        }
 
         self.remove_piece(from);
 
         let captured = if mv.is_ep() {
             let cap_sq = Square::from_file_rank(to.file(), from.rank());
-            let cap    = self.piece_at(cap_sq);
+            let cap = self.piece_at(cap_sq);
             self.remove_piece(cap_sq);
             cap
         } else if mv.is_capture() {
@@ -61,7 +63,11 @@ impl Position {
             None
         };
 
-        let placed = if mv.is_promo() { Piece::new(us, mv.promo_piece()) } else { moving };
+        let placed = if mv.is_promo() {
+            Piece::new(us, mv.promo_piece())
+        } else {
+            moving
+        };
         self.put(to, placed);
 
         if mv.is_castle() {
@@ -71,11 +77,15 @@ impl Position {
         }
 
         self.castling = CastlingRights(
-            self.castling.0 & CASTLING_MASK[from.index()] & CASTLING_MASK[to.index()]
+            self.castling.0 & CASTLING_MASK[from.index()] & CASTLING_MASK[to.index()],
         );
 
         self.en_passant = if mv.flags() == Move::DOUBLE_PUSH {
-            let ep_rank = if us == Color::White { Rank::R3 } else { Rank::R6 };
+            let ep_rank = if us == Color::White {
+                Rank::R3
+            } else {
+                Rank::R6
+            };
             Some(Square::from_file_rank(from.file(), ep_rank))
         } else {
             None
@@ -87,34 +97,42 @@ impl Position {
             self.halfmove_clock + 1
         };
 
-        if us == Color::Black { self.fullmove_number += 1; }
+        if us == Color::Black {
+            self.fullmove_number += 1;
+        }
         self.side_to_move = them;
 
         // XOR in new castling, EP, and side-to-move keys.
         self.hash ^= crate::zobrist::castling_key(self.castling.0);
-        if let Some(ep) = self.en_passant { self.hash ^= crate::zobrist::ep_key(ep); }
+        if let Some(ep) = self.en_passant {
+            self.hash ^= crate::zobrist::ep_key(ep);
+        }
         self.hash ^= crate::zobrist::side_key();
 
         UndoState { captured, ..undo }
     }
 
     pub fn unmake_move(&mut self, mv: Move, undo: UndoState) {
-        self.side_to_move   = self.side_to_move.flip();
-        self.castling       = undo.castling;
-        self.en_passant     = undo.en_passant;
+        self.side_to_move = self.side_to_move.flip();
+        self.castling = undo.castling;
+        self.en_passant = undo.en_passant;
         self.halfmove_clock = undo.halfmove;
-        if self.side_to_move == Color::Black { self.fullmove_number -= 1; }
+        if self.side_to_move == Color::Black {
+            self.fullmove_number -= 1;
+        }
 
-        let us   = self.side_to_move;
+        let us = self.side_to_move;
         let from = mv.from();
-        let to   = mv.to();
+        let to = mv.to();
 
         self.remove_piece(to);
         self.put(from, Piece::new(us, undo.moved_kind));
 
         if mv.is_ep() {
             let cap_sq = Square::from_file_rank(to.file(), from.rank());
-            if let Some(cap) = undo.captured { self.put(cap_sq, cap); }
+            if let Some(cap) = undo.captured {
+                self.put(cap_sq, cap);
+            }
         } else if let Some(cap) = undo.captured {
             self.put(to, cap);
         }
@@ -135,7 +153,7 @@ fn castle_rook_squares(color: Color, flags: u16) -> (Square, Square) {
         (Color::White, Move::CASTLE_K) => (Square::H1, Square::F1),
         (Color::White, Move::CASTLE_Q) => (Square::A1, Square::D1),
         (Color::Black, Move::CASTLE_K) => (Square::H8, Square::F8),
-        _                              => (Square::A8, Square::D8),
+        _ => (Square::A8, Square::D8),
     }
 }
 
@@ -171,8 +189,14 @@ mod tests {
         let mv = Move::new(Square::E1, Square::G1, Move::CASTLE_K);
         let undo = pos.make_move(mv);
         // After castling: king on g1, rook on f1
-        assert_eq!(pos.piece_at(Square::G1).map(|p| p.kind), Some(PieceType::King));
-        assert_eq!(pos.piece_at(Square::F1).map(|p| p.kind), Some(PieceType::Rook));
+        assert_eq!(
+            pos.piece_at(Square::G1).map(|p| p.kind),
+            Some(PieceType::King)
+        );
+        assert_eq!(
+            pos.piece_at(Square::F1).map(|p| p.kind),
+            Some(PieceType::Rook)
+        );
         pos.unmake_move(mv, undo);
         assert_eq!(pos.to_fen(), fen);
     }
@@ -195,7 +219,10 @@ mod tests {
         let mut pos = Position::from_fen(fen).unwrap();
         let mv = Move::new(Square::A7, Square::A8, Move::PROMO_Q);
         let undo = pos.make_move(mv);
-        assert_eq!(pos.piece_at(Square::A8).map(|p| p.kind), Some(PieceType::Queen));
+        assert_eq!(
+            pos.piece_at(Square::A8).map(|p| p.kind),
+            Some(PieceType::Queen)
+        );
         pos.unmake_move(mv, undo);
         assert_eq!(pos.to_fen(), fen);
     }

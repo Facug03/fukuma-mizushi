@@ -26,6 +26,13 @@ pub enum PieceType {
     King   = 5,
 }
 
+impl PieceType {
+    pub const ALL: [PieceType; 6] = [
+        PieceType::Pawn, PieceType::Knight, PieceType::Bishop,
+        PieceType::Rook, PieceType::Queen,  PieceType::King,
+    ];
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Piece {
     pub color: Color,
